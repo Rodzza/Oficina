@@ -12,7 +12,8 @@ Idioma pt-BR, fuso `America/Sao_Paulo`, moeda BRL.
 |---|---|---|
 | 1 | Banco no Supabase: tabelas, regra de capacidade, permissões, testes e seed | **este PR** |
 | 2 | App base Expo: login, perfis, cadastros | a fazer |
-| 3 | Telas de agenda: agendar, grade do dia, pátio agora, status | a fazer |
+| 3 | Telas de agenda: agendar, grade do dia, pátio agora, status, botão de aviso no WhatsApp | a fazer |
+| 3b | Envio automático do aviso "carro pronto" pela API oficial do WhatsApp (Edge Function) | a fazer |
 | 4 | Entrega: testes com a oficina, publicação, dados reais | a fazer |
 
 ## Estrutura
@@ -23,6 +24,7 @@ supabase/
     ..._schema.sql             tabelas, constraint de exclusão, triggers
     ..._regras_capacidade.sql  disponibilidade, alocação, status, conflitos
     ..._api_e_rls.sql          funções RPC do app e segurança por oficina/perfil
+    ..._notificacoes.sql       fila do aviso "carro pronto" no WhatsApp
   seed.sql                     oficina de exemplo com 4 boxes, 10 serviços, clientes e agendamentos
 db/
   supabase_stub.sql            imita o mínimo do Supabase para testar num Postgres puro
@@ -61,6 +63,20 @@ duas atendentes ao mesmo tempo) consegue colocar mais carros do que boxes.
   peça; ambos → concluído; concluído → entregue. Cancelado, não compareceu e entregue são finais.
 - **Perfis:** admin configura tudo; atendente agenda e cadastra clientes/veículos; mecânico só
   movimenta o trabalho no box (em atendimento, aguardando peça, concluído).
+
+## Aviso de carro pronto no WhatsApp
+
+Quando o agendamento vira **concluído**, o banco grava uma notificação pendente em `notificacoes`
+com o telefone do dono do carro (formato `55DDDNÚMERO`) e a mensagem pronta:
+
+> Olá, João! Seu Gol placa BRA2E19 está pronto e já pode ser retirado na Oficina Exemplo.
+
+- **Envio automático (passo 3b):** uma Edge Function pega as pendentes com
+  `pegar_notificacoes_pendentes()` (nunca a mesma duas vezes) e envia pelo WhatsApp Cloud API da
+  Meta usando um template aprovado, com as variáveis em `parametros`. Até 3 tentativas.
+- **Sem API configurada ou se falhar:** o app mostra um botão que abre o WhatsApp com a mensagem
+  (`https://wa.me/<telefone>?text=<mensagem>`) e chama `marcar_notificacao_enviada()`.
+- Um aviso por agendamento. A oficina pode desligar em `oficinas.avisar_carro_pronto`.
 
 ## API para o app (supabase-js)
 
